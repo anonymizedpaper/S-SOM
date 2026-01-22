@@ -1,4 +1,4 @@
-# 3D Surface Segmentation using Spherical SOM
+# 3D Mesh Segmentation using Spherical SOM
 
 This project implements an unsupervised 3D surface segmentation method based on **Spherical Self-Organizing Maps (S-SOM)**.
 It clusters face normals and geometric information from a 3D mesh using a spherical topology, then refines the segmentation through post-processing steps.
