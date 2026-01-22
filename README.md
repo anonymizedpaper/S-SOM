@@ -34,3 +34,7 @@ python seg_part_int.py --input=.\Princeton\30.obj --fea="sdf" --thr=0.135
 User can adjust the slider interactively to see the segmentation result 
 
 ![Interactive](https://github.com/user-attachments/assets/4c04e266-3e20-4031-beb0-73d5600f33d7)
+
+## Methods and Results
+<img width="4959" height="3496" alt="part_segmentation_fig" src="https://github.com/user-attachments/assets/64d442c9-8a51-41fb-ae8b-e723ed73b6eb" />
+
