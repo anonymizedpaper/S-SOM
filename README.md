@@ -24,10 +24,11 @@ Input: 3D model file (*.obj), and (*.sdf) in case using SDF feature.
 Install dependencies via bash
 pip install -r requirements.txt
 
-### Run Facet segmentation using normal vector as feature descriptor
+## Run
+### Facet segmentation using normal vector as feature descriptor
 python seg_facet.py --obj_file=./3DPuzzle/brick_part01.obj
 
-### Run part segmentation
+### Part segmentation
 python seg_part_int.py --input=.\Princeton\30.obj --fea="sdf" --thr=0.135
 
 #### Illustration of interactive adjustment of the segment merging threshold
