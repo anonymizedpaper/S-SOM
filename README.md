@@ -15,7 +15,6 @@ Input: 3D model file (*.obj), and (*.sdf) in case using SDF feature.
 - Visualize segmentation results using `pyvista`
 - 
 ## Requirements
-
 - Python 3.7+
 - `numpy`
 - `pyvista`
@@ -25,15 +24,13 @@ Input: 3D model file (*.obj), and (*.sdf) in case using SDF feature.
 Install dependencies via bash
 pip install -r requirements.txt
 
-## Run Facet segmentation using normal vector as feature descriptor
-python .\main.py --obj_file='./Models/brick_part01.obj'
+### Run Facet segmentation using normal vector as feature descriptor
+python seg_facet.py --obj_file=./3DPuzzle/brick_part01.obj
 
-## Run Part segmentation using precomputed SDF (in a *.sdf file with same name and in same folder with *.obj) and curvature
-### Precompute the sdf if need
-python cal_sdf.py --obj_file='./Models/181.obj'
-### Run segmentation
-python .\main2D.py --obj_file='./Models/181.obj'
+### Run part segmentation
+python seg_part_int.py --input=.\Princeton\30.obj --fea="sdf" --thr=0.135
 
+#### Illustration of interactive adjustment of the segment merging threshold
+User can adjust the slider interactively to see the segmentation result 
 
-### Illustration of interactive adjustment of the segment merging threshold
 ![Interactive](https://github.com/user-attachments/assets/4c04e266-3e20-4031-beb0-73d5600f33d7)
