@@ -33,3 +33,7 @@ python .\main.py --obj_file='./Models/brick_part01.obj'
 python cal_sdf.py --obj_file='./Models/181.obj'
 ### Run segmentation
 python .\main2D.py --obj_file='./Models/181.obj'
+
+
+### Illustration of interactive adjustment of the segment merging threshold
+![Interactive](https://github.com/user-attachments/assets/4c04e266-3e20-4031-beb0-73d5600f33d7)
