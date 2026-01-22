@@ -7,13 +7,13 @@ Input: 3D model file (*.obj), and (*.sdf) in case using SDF feature.
 ## Features
 
 - Load a 3D mesh (.obj) and compute face normals
-- Apply Spherical SOM to segment the surface based on normals
+- Train Spherical SOM in an unsupervised manner to segment the surface based on surface descriptors (normals,sdf, curvature)
 - Post-process to:
   - Separate disconnected regions
   - Merge small regions
   - Merge similar regions based on surface orientation
 - Visualize segmentation results using `pyvista`
-- 
+
 ## Requirements
 - Python 3.7+
 - `numpy`
