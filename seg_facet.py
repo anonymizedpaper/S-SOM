@@ -92,7 +92,7 @@ def main(normal_weight, lr, radius, obj_file, min_region_rate, threshold_similar
     print(f"Total running time: {running_time:.2f} seconds")
 
     # Start plotting, Create a 2x3 grid plotter ##################################################
-    plotter = pv.Plotter(shape=(2, 3))
+    plotter = pv.Plotter(shape=(2, 3), title= "Facet segmentation by S-SOM")
 
     plotter.subplot(0, 0) #-----------------------------------------------
     plotter.add_mesh(obj_mesh, color='grey', show_edges=True, edge_opacity=0.2)    
