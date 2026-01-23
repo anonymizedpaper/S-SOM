@@ -26,7 +26,7 @@ Input: 3D model file (*.obj)
  - scikit-learn
  - pymeshlab
 
-Install dependencies via bash
+Install dependencies via bash:
 pip install -r requirements.txt
 
 ## Run
