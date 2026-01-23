@@ -166,8 +166,8 @@ def process_obj_file(obj_file, feature_name, sdf_coneangle, lr, radius, min_regi
 
     # Create a 2x3 grid plotter #################################################################
     if visualize:
-        plotter = pv.Plotter(shape=(2, 3))
-
+        plotter = pv.Plotter(shape=(2, 3), title= "Part segmentation by S-SOM")
+        
         plotter.subplot(0, 0)
         plotter.add_text("Initial SOM Clustering", font_size=12)
         plot(plotter, obj_mesh, "raw_labels", raw_labels_count)
