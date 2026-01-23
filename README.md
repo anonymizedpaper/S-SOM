@@ -28,10 +28,10 @@ Install dependencies via bash
 pip install -r requirements.txt
 
 ## Run
-- Facet segmentation using normal vector as feature descriptor
+- Facet segmentation using normal vector as feature descriptor:
 python seg_facet.py --obj_file=./datasets/3DPuzzle/brick_part01.obj
 
-- Part segmentation
+- Part segmentation:
 python seg_part_int.py --input=./datasets/Princeton/30.obj --fea="sdf" --thr=0.135
 
 ## Illustration of interactive adjustment of the segment merging threshold
