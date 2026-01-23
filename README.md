@@ -3,6 +3,9 @@
 This project implements an unsupervised 3D surface segmentation method based on **Spherical Self-Organizing Maps (S-SOM)**.
 It clusters face normals and geometric information from a 3D mesh using a spherical topology, then refines the segmentation through post-processing steps.
 Input: 3D model file (*.obj)
+
+<img width="1614" height="1043" alt="Part_seg_plotter" src="https://github.com/user-attachments/assets/acfa75c1-10d9-4d2e-8e9d-df4dbbf226ea" />
+
  
 ## Features
 
