@@ -18,11 +18,13 @@ Input: 3D model file (*.obj)
 - Visualize segmentation results using `pyvista`
 
 ## Requirements
-- Python 3.7+
-- `numpy`
-- `pyvista`
-- `matplotlib`
-- scikit-learn
+- Python 3.13.5
+- Important libs:
+ - numpy
+ - pyvista
+ - matplotlib
+ - scikit-learn
+ - pymeshlab
 
 Install dependencies via bash
 pip install -r requirements.txt
