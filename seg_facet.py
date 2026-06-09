@@ -1,7 +1,8 @@
 from turtle import title
 import numpy as np
 import pyvista as pv
-from SSOM import *
+from SSOM3D import *
+from helper import *
 import argparse
 import argparse
 import matplotlib.colors as mcolors
@@ -35,57 +36,39 @@ def plot(plotter, mesh, scalar_name, class_count):
     plotter.add_mesh(mesh, scalars=scalar_name,  cmap = colors, show_scalar_bar=True, show_edges=True, edge_opacity=0.3, scalar_bar_args={"fmt": "%.0f", "n_labels": class_count})
 
 
-def main(normal_weight, lr, radius, obj_file, min_region_rate, threshold_similarity_merge):
-   
-    obj_mesh = load_obj_with_face_normals(obj_file)
+def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merges=1000):
+
+    obj_mesh = load_obj_with_face_normals(input)
     face_adjacency = build_face_adjacency(obj_mesh)
 
-    normed_xyz = normalize(obj_mesh.cell_data["face_center"]) 
-    n = len(normed_xyz)
-    cx = sum(p[0] for p in normed_xyz) / n
-    cy = sum(p[1] for p in normed_xyz) / n
-    cz = sum(p[2] for p in normed_xyz) / n
-    translated_xyz = np.array([(x - cx, y - cy, z - cz) for x, y, z in normed_xyz])# Translate all points
+    # Feature-preserving normal-field smoothing to denoise the SOM input (reduces
+    # salt-and-pepper labels). Geometry is untouched; sharp edges are preserved.
+    smooth_normals(obj_mesh, face_adjacency, n_iter=5, feature_angle_deg=30.0)
 
     import time
     start_time = time.time()
-    # # Load mesh and assign 6D features, train SOM
-    #data_for_som = np.concatenate((translated_xyz*(1-normal_weight), obj_mesh.cell_data['Normals']*normal_weight), axis=1)
-    data_for_som = obj_mesh.cell_data['Normals']
-
-    # Normalize features: divide by the maximum row-wise (sample) norm
-    norms = np.linalg.norm(data_for_som, axis=1)
-    max_norm = float(np.max(norms)) if norms.size else 0.0
-    if max_norm > 1e-12:
-        data_for_som = data_for_som / max_norm
+    data_for_som = obj_mesh.cell_data['Normals']   # already unit-length (compute_normals + smooth_normals)
 
     spherical_mesh = pv.read("regular_sphere.obj")
-    som = SphereSOM(spherical_mesh, normal_weight=normal_weight, lr=lr, radius=radius)
-    som.train(data_for_som, n_epochs=2000, n_rings=-1)
+    som = SphereSOM3D(spherical_mesh, radius=radius)
+    som.train(data_for_som, n_epochs=2000, n_rings=n_rings, init_neuron_size = init_neuron_size, lr0=lr)
     
     #Predict labels
-    raw_labels = som.predict(data_for_som)
-    unique_raw_labels = np.unique(raw_labels)
-    raw_labels, raw_labels_count = remap_labels(raw_labels)  # Convert to face labels 0-based indices
-    #raw_labels_count = len(np.unique(raw_labels))    
+    bmu_labels = som.predict(data_for_som)                         # node id per face
+    raw_labels, raw_labels_count = remap_labels(bmu_labels, mesh=obj_mesh)  # Convert to face labels 0-based indices
     print("SOM clustering: there are {} clusters".format(raw_labels_count))
-    obj_mesh.cell_data["raw_labels"] = raw_labels # Assign cluster labels to each face  
+    obj_mesh.cell_data["raw_labels"] = raw_labels # Assign cluster labels to each face
     
     #Separate disconnected components
     separated_region_labels = separate_disconnected_components(obj_mesh, face_adjacency, raw_labels)
-    obj_mesh.cell_data["separated_region_labels"] = separated_region_labels 
-    
-    #Merge small regions to their biggest neighbor
-    region_labels = merge_small_regions(obj_mesh, separated_region_labels, face_adjacency, min_region_rate)
-    merged_small_region_labels, merged_region_labels_count = remap_labels(region_labels)  # Convert to face labels 0-based indices
-    obj_mesh.cell_data["merged_small_region_labels"] = merged_small_region_labels
-    
-    # Merge similar regions based on normal direction
-    merged_region_label_temp = merged_small_region_labels.copy()
-    #for i in range(1):
-    merged_region_label_temp = merge_similar_direction_regions(obj_mesh, merged_region_label_temp, face_adjacency, threshold_similarity_merge)
-    merged_similar_region_labels, merged_similar_region_labels_count = remap_labels(merged_region_label_temp)  # Convert to face labels 0-based indices
-    obj_mesh.cell_data["merged_similar_region_labels"] = merged_similar_region_labels
+    separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)  # Convert to face labels 0-based indices
+
+    separated_region_labels = merge_zero_area_regions(obj_mesh, separated_region_labels, face_adjacency)
+    separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)
+    obj_mesh.cell_data["separated_region_labels"] = separated_region_labels
+
+    # The power-based region merge is now driven by the power_thr slider in
+    # subplot(1, 1) (see render_segmentation below), so it is not run here.
 
     end_time = time.time()
     running_time = end_time - start_time
@@ -95,53 +78,117 @@ def main(normal_weight, lr, radius, obj_file, min_region_rate, threshold_similar
     plotter = pv.Plotter(shape=(2, 3), title= "Facet segmentation by S-SOM")
 
     plotter.subplot(0, 0) #-----------------------------------------------
-    plotter.add_mesh(obj_mesh, color='grey', show_edges=True, edge_opacity=0.2)    
+    plotter.add_mesh(obj_mesh, color='grey', show_edges=True, edge_opacity=0.2)      
 
     plotter.subplot(0, 1) #-----------------------------------------------
-    plot(plotter, obj_mesh, "raw_labels", raw_labels_count)   
+    plotter.add_mesh(pv.Sphere(radius=1.0), color='white', opacity=0.15)
 
-    plotter.subplot(0, 2) #-----------------------------------------------
-    spherical_ori = pv.read("regular_sphere.obj")
-    plotter.add_mesh(spherical_ori, color='white', opacity=0.3, show_edges=True)   
-    vertex_points = spherical_ori.points     # Create point cloud for vertices
-    vertex_cloud = pv.PolyData(vertex_points)    
-    # Create spheres at vertex positions
-    glyphs = vertex_cloud.glyph(scale=True, geom=pv.Sphere(radius=0.02))    
-    # Add the spheres to the plotter
-    plotter.add_mesh(glyphs, color='grey', render_points_as_spheres=True, point_size=10)
-    
-    highlight_points = spherical_mesh.points[unique_raw_labels]
-    highlight_cloud = pv.PolyData(highlight_points)
-    glyphs = highlight_cloud.glyph(scale=True, geom=pv.Sphere(radius=0.05))
-    colors = get_color_map(raw_labels_count)
-    colors_rgb = np.array([mcolors.to_rgb(c) for c in colors])    # Convert hex colors to RGB values (0-255)
-    colors_glyphs = (colors_rgb * 255).astype(np.uint8)
-    glyphs.point_data["colors"] = np.repeat(colors_glyphs, glyphs.n_points // len(colors_glyphs), axis=0)
-    plotter.add_mesh(glyphs, scalars="colors", cmap=get_color_map(len(unique_raw_labels)), opacity= 1, show_scalar_bar=True, rgb=True, point_size=30,  scalar_bar_args={"fmt": "%.0f", "n_labels": raw_labels_count})   
-    plotter.add_scalar_bar(title="Cluster ID", n_labels=raw_labels_count, vertical=False)
+    # Per-node colors. Winning neurons (BMU of >=1 face) get their label color
+    # (matching the segmentation plots); neurons that win no data are black.
+    neuron_points = som.get_weights()
+    n_nodes = len(neuron_points)
+    winners = np.unique(bmu_labels)                       # neurons that are a BMU (node ids)
+    # raw_labels = remap_labels(bmu_labels): each winning node maps to a 0-based
+    # label (sorted by node id). Rebuild that same mapping for the colors.
+    node_to_seg = {node: i for i, node in enumerate(winners)}
+    seg_colors_rgb = (np.array([mcolors.to_rgb(c) for c in get_color_map(raw_labels_count)]) * 255).astype(np.uint8)
+    neuron_rgb = np.zeros((n_nodes, 3), dtype=np.uint8)   # black by default (no winning data)
+    for i in winners:
+        neuron_rgb[i] = seg_colors_rgb[node_to_seg[i]]
+
+    # 1) The SOM input as a point cloud on the unit sphere: each face normal is a
+    #    unit vector, so it lands on the surface of the unit sphere. Color each data
+    #    point by the color of its BMU neuron.
+    data_cloud = pv.PolyData(np.asarray(data_for_som, dtype=float))
+    data_cloud.point_data["cluster"] = raw_labels              # cluster id per face (BMU)
+    plotter.add_mesh(data_cloud, scalars="cluster", cmap=get_color_map(raw_labels_count),
+                     render_points_as_spheres=True, point_size=5, opacity=0.6,  show_scalar_bar=True, label="data normals",
+                     scalar_bar_args={"title": "cluster", "fmt": "%.0f", "n_labels": min(raw_labels_count, 20), "vertical": False})
+
+    # 2) The trained SOM grid (node topology, deformed to where the neurons moved).
+    plotter.add_mesh(som.get_mesh(), style='wireframe', color='grey',
+                     opacity=0.5, line_width=1, label="SOM grid")
+
+    # 3) The trained SOM neurons, colored as computed above.
+    neuron_glyphs = pv.PolyData(neuron_points).glyph(scale=False, geom=pv.Sphere(radius=0.03))
+    points_per_neuron = neuron_glyphs.n_points // n_nodes   # divides evenly: same geom per node
+    neuron_glyphs.point_data["colors"] = np.repeat(neuron_rgb, points_per_neuron, axis=0)
+    plotter.add_mesh(neuron_glyphs, scalars="colors", rgb=True, label="SOM neurons")
+    #plotter.add_legend()
 
     plotter.subplot(1, 0) #-----------------------------------------------
+    plot(plotter, obj_mesh, "raw_labels", raw_labels_count) 
+
+    plotter.subplot(1, 1) #-----------------------------------------------
     obj_mesh01 = obj_mesh.copy()
     plot(plotter,obj_mesh01, "separated_region_labels",  len(np.unique(separated_region_labels)))   
     
-    plotter.subplot(1, 1) #-----------------------------------------------
-    obj_mesh10 = obj_mesh.copy()
-    plot(plotter,obj_mesh10, "merged_small_region_labels", merged_region_labels_count)   
-
     plotter.subplot(1, 2) #-----------------------------------------------
-    obj_mesh11 = obj_mesh.copy()
-    plot(plotter, obj_mesh11, "merged_similar_region_labels", merged_similar_region_labels_count)
+    # Live power_thr control: re-run ONLY the region merge (SOM training is not
+    # repeated) whenever the slider is released, and redraw this subplot.
+    obj_mesh12 = obj_mesh.copy()
+
+    # Holds the most recently rendered merge so it can be saved after the
+    # interactive session closes (reflects the final power_thr the user explored).
+    latest = {"labels": None}
+
+    def render_segmentation(power_thr_val):
+        merged = merge_region_based_on_power(
+            obj_mesh, separated_region_labels.copy(), face_adjacency,
+            power_thr=float(power_thr_val), max_merges=max_merges,
+            target_n_regs=None, verbose=False)
+        labels, count = remap_labels(merged)          # 0-based labels + region count
+        count = max(int(count), 1)
+        latest["labels"] = labels                     # remember for saving on exit
+        obj_mesh12.cell_data["merged_similar_region_labels"] = labels
+        plotter.subplot(1, 2)
+        try:
+            plotter.remove_scalar_bar("merged")        # avoid stacking on redraw
+        except Exception:
+            pass
+        plotter.add_mesh(
+            obj_mesh12, scalars="merged_similar_region_labels",
+            cmap=get_color_map(count), show_edges=True, edge_opacity=0.3,
+            show_scalar_bar=True, name="seg11",        # name => replaces old actor
+            scalar_bar_args={"fmt": "%.0f", "n_labels": min(count, 20), "title": "merged"})
+        plotter.add_text(f"power_thr = {float(power_thr_val):.3f}   |   {count} regions",
+                         position="lower_left", font_size=9, name="seg11_info")
+        return count
+
+    render_segmentation(power_thr)                     # initial draw at the CLI value
+
+    def on_power_thr(value):
+        render_segmentation(value)
+        plotter.render()
+
+    plotter.subplot(1, 2)
+    plotter.add_slider_widget(
+        on_power_thr, rng=[0.0, 1.0], value=power_thr, title="power_thr",
+        pointa=(0.30, 0.92), pointb=(0.95, 0.92), style="modern", fmt="%.3f")
+
     plotter.show()
-     #End plotting               ############################################################    
+
+    # Save the final (slider-tuned) segmentation: one face label per line, to a
+    # .seg file next to the input mesh.
+    merged_similar_region_labels = latest["labels"]
+    if merged_similar_region_labels is not None:
+        seg_path = input.replace('.obj', '.seg')
+        with open(seg_path, 'w') as f:
+            for segment_index in merged_similar_region_labels:
+                f.write(f'{segment_index}\n')
+        print("segmentation saved to ", seg_path)
+
+    #plotter.subplot(1, 2) #-----------------------------------------------
+     #End plotting               ############################################################
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Spherical SOM surface segmentation.")
-    parser.add_argument("--normal_weight", type=float, default = 1, help="Weight for normal direction")
-    parser.add_argument("--lr", type=float, default=0.2, help="Learning rate for SOM training")
+    parser.add_argument("--input", type=str, default = "./datasets/3DPuzzle/brick_part01.obj",  help="Path to the OBJ file")
     parser.add_argument("--radius", type=float, default=0.1, help="Neighborhood radius for SOM")
-    parser.add_argument("--obj_file", type=str, default = "./Models/brick_part01.obj",  help="Path to the OBJ file")
-    parser.add_argument("--min_region_face_count", type=float, default=0.01, help="Minimum proportion of faces per region")
-    parser.add_argument("--threshold_similarity_merge", type=float, default=0.8, help="Similarity threshold for region merging")
+    parser.add_argument("--n_rings", type=int, default=0, help="Number of rings in the neighborhood for SOM training")
+    parser.add_argument("--init_neu_size", type=float, default=2, help="Initial distance of neurons to the origin")
+    parser.add_argument("--lr", type=float, default=0.2, help="Learning rate for SOM training")
+    parser.add_argument("--power_thr", type=float, default=0.39, help="stop when best remaining power < this value")
 
     args = parser.parse_args()
-    main(args.normal_weight, args.lr, args.radius, args.obj_file, args.min_region_face_count, args.threshold_similarity_merge)
+    main(args.input, args.radius,  args.n_rings, args.init_neu_size, args.lr, args.power_thr)
