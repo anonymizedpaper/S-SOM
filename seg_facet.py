@@ -30,10 +30,14 @@ def plot_with_title(plotter, mesh, scalar_name, class_count, title):
         plotter.add_mesh(mesh, scalars=scalar_name,  cmap = colors, show_scalar_bar=True, show_edges=True, edge_opacity=0.2, scalar_bar_args={"fmt": "%.0f", "n_labels": class_count, "title": title})
     else:
         plotter.add_mesh(mesh, scalars=scalar_name,  cmap = colors, show_scalar_bar=True, show_edges=True, edge_opacity=0.2, scalar_bar_args={"fmt": "%.0f", "n_labels": 20, "title": title})
-def plot(plotter, mesh, scalar_name, class_count):    
+def plot(plotter, mesh, scalar_name, class_count, max_bar_labels=20):
     assert(class_count > 0)
     colors = get_color_map(class_count)
-    plotter.add_mesh(mesh, scalars=scalar_name,  cmap = colors, show_scalar_bar=True, show_edges=True, edge_opacity=0.3, scalar_bar_args={"fmt": "%.0f", "n_labels": class_count})
+    # Cap the number of ticks drawn on the scalar bar: with many regions, drawing
+    # one tick per class produces an unreadable, overlapping bar. Colors still span
+    # all classes; only the displayed tick labels are thinned out.
+    n_labels = min(class_count, max_bar_labels)
+    plotter.add_mesh(mesh, scalars=scalar_name,  cmap = colors, show_scalar_bar=True, show_edges=True, edge_opacity=0.3, scalar_bar_args={"fmt": "%.0f", "n_labels": n_labels})
 
 
 def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merges=1000):
@@ -55,8 +59,7 @@ def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merg
     
     #Predict labels
     bmu_labels = som.predict(data_for_som)                         # node id per face        
-    bmu_labels = merge_small_faces(obj_mesh, bmu_labels, face_adjacency, area_ratio=0.01) # Merge small faces into their largest neighbor's cluster (if the face is <5% of the average face area)
-
+    bmu_labels = merge_small_faces(obj_mesh, bmu_labels, face_adjacency, area_ratio=0.03) # Merge small faces into their largest neighbor's cluster (if the face is <5% of the average face area)
 
     raw_labels, raw_labels_count = remap_labels(bmu_labels, mesh=obj_mesh)  # Convert to face labels 0-based indices
     print("SOM clustering: there are {} clusters".format(raw_labels_count))
@@ -66,7 +69,6 @@ def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merg
     separated_region_labels = separate_disconnected_components(obj_mesh, face_adjacency, raw_labels)
     separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)  # Convert to face labels 0-based indices
 
-    #separated_region_labels = merge_zero_area_regions(obj_mesh, separated_region_labels, face_adjacency)
     separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)
     obj_mesh.cell_data["separated_region_labels"] = separated_region_labels
 
