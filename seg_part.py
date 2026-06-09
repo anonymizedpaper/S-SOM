@@ -227,16 +227,17 @@ def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merg
     som.train(features, n_epochs=1000, lr=lr, radius=radius )
     
     #Predict labels
-    raw_labels = som.predict(features)
-    print("raw_labels", raw_labels)
+    bmu_labels = som.predict(features)
+    print("raw_labels", bmu_labels)
+    bmu_labels = merge_small_faces(obj_mesh, bmu_labels, face_adjacency, area_ratio=0.03) # Merge small faces into their largest neighbor's cluster (if the face is <5% of the average face area)
 
-    raw_labels, raw_labels_count = remap_labels(raw_labels)  # Convert to face labels 0-based indices
+    raw_labels, raw_labels_count = remap_labels(bmu_labels)  # Convert to face labels 0-based indices
     print("SOM clustering: there are {} clusters".format(raw_labels_count))
     obj_mesh.cell_data["raw_labels"] = raw_labels # Assign cluster labels to each face  
     
     #Separate disconnected components
     separated_region_labels = separate_disconnected_components(obj_mesh, face_adjacency, raw_labels)
-    separated_region_labels = merge_zero_area_regions(obj_mesh, separated_region_labels, face_adjacency)
+    #separated_region_labels = merge_zero_area_regions(obj_mesh, separated_region_labels, face_adjacency)
     separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)
     obj_mesh.cell_data["separated_region_labels"] = separated_region_labels
 

@@ -190,6 +190,29 @@ def compute_face_areas(mesh):
     """Returns per-face area array computed from triangle geometry."""
     return mesh.compute_cell_sizes(length=False, area=True, volume=False).cell_data['Area']
 
+def merge_small_faces(mesh, labels, face_adjacency, area_ratio=0.05):
+    """Reassign very small triangles to the label of their biggest neighbor.
+
+    A face is "very small" when its area is below area_ratio * median face area.
+    Each such face adopts the label of its largest-area edge-adjacent neighbor, so
+    tiny slivers stop forming their own clusters / contaminating the segmentation.
+
+    Faces are processed smallest-first and labels are updated in place, so a sliver
+    surrounded only by other slivers still inherits a resolved label.
+    """
+    areas = compute_face_areas(mesh)
+    threshold = area_ratio * np.median(areas)
+    labels = np.asarray(labels).copy()
+
+    small_faces = np.where(areas < threshold)[0]
+    for face in sorted(small_faces.tolist(), key=lambda f: areas[f]):
+        neighbors = face_adjacency.get(face)
+        if not neighbors:
+            continue
+        biggest = max(neighbors, key=lambda nb: areas[nb])
+        labels[face] = labels[biggest]
+    return labels
+
 def merge_zero_area_regions(mesh, region_labels, face_adjacency, area_tol=1e-3):
     """Merge regions with total area <= area_tol into an adjacent real region.
 
