@@ -13,8 +13,7 @@ Input: 3D model file (*.obj)
 - Train Spherical SOM in an unsupervised manner to segment the surface based on surface descriptors (normals,sdf, curvature)
 - Post-process to:
   - Separate disconnected regions
-  - Merge small regions
-  - Merge similar regions based on surface orientation
+  - Merge similar regions to avoid oversegmentation using a power score function 
 - Visualize segmentation results using `pyvista`
 
 ## Requirements
@@ -33,8 +32,8 @@ pip install -r requirements.txt
 - Facet segmentation using normal vector as feature descriptor:
 python seg_facet.py --obj_file=./datasets/3DPuzzle/brick_part01.obj
 
-- Part segmentation:
-python seg_part_int.py --input=./datasets/Princeton/30.obj --fea="sdf" --thr=0.135
+- Part segmentation: --fea can be either "sdf_cur", "sdf", or "cur"
+python seg_part.py --input=./datasets/Princeton/30.obj --fea="sdf_cur" 
 
 ## Illustration of interactive adjustment of the segment merging threshold
 User can adjust the slider interactively to see the segmentation result 

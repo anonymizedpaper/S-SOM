@@ -292,7 +292,7 @@ def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merg
         # Live controls: re-run ONLY the region merge (line 174) whenever a slider
         # is released, and redraw this subplot. SOM/SDF stay fixed. Shared state
         # holds the current power_thr and alpha (beta = 1 - alpha).
-        ctrl = {"power_thr": float(power_thr), "alpha": 3/4}
+        ctrl = {"power_thr": float(power_thr), "alpha": 1/3}
 
         def render_final_segmentation():
             alpha = float(ctrl["alpha"]); beta = 1.0 - alpha
@@ -340,8 +340,6 @@ def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merg
             pointa=(0.30, 0.78), pointb=(0.95, 0.78), style="modern", fmt="%.2f")
 
         plotter.show()
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Spherical SOM surface segmentation.")    
     parser.add_argument("--radius", type=float, default=1, help="Neighborhood radius for SOM")
