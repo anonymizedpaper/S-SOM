@@ -1,10 +1,15 @@
 
+
 # 3D Mesh Segmentation using Spherical SOM
 
 This project implements an unsupervised 3D surface segmentation method based on **Spherical Self-Organizing Maps (S-SOM)**.
 It clusters face normals and geometric information from a 3D mesh using a spherical topology, then refines the segmentation through post-processing steps.
 Input: 3D model file (*.obj)
 
+### Facet segmentation via normmal vectors
+<img width="3840" height="2088" alt="Seg_facet" src="https://github.com/user-attachments/assets/f43124b4-79de-4c4b-80d7-5c4eacc20f79" />
+
+### Part segmentation via SDF (and/or) curvatures
 <img width="3835" height="2299" alt="Seg_part_interactive" src="https://github.com/user-attachments/assets/e737af08-94b7-4f98-82fb-45066f4fd29e" />
  
 ## Features
