@@ -56,3 +56,14 @@ With facet segmentation, face normals are unit vectors, so the input to the SOM 
 ![image alt](https://github.com/anonymizedpaper/S-SOM/blob/d18a88302b7cc2ea487085158236ec46fe179ddc/Ablation_top.png)
 
 
+For part segmentation, the picture is different. The descriptors are the normalized SDF and mean curvature, which fill a bounded region of $\mathbb{R}^2$
+rather than a closed manifold, so the topological mismatch that penalizes the planar SOM on directional data does not arise. Consistent with this, we observe
+no clear difference in final segmentation quality between the two lattices once post-processing is applied. They differ mainly in the raw clustering: the planar
+SOM leaves considerably more active prototypes, and hence more initial regions,
+since its neurons are spread over a sheet whose extent is not matched to the
+compact descriptor region. This makes the subsequent stages heavier, as both the
+connected-component separation and the region-merging step scale with the number
+of initial regions. The spherical lattice therefore brings no accuracy gain for
+scalar descriptors, but yields a more economical initial clustering and allows a
+single unchanged pipeline to serve both segmentation objectives without adapting
+the lattice to the descriptor type.
