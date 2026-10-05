@@ -7,6 +7,7 @@ import argparse
 import argparse
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 def get_color_map(class_count):
@@ -40,38 +41,93 @@ def plot(plotter, mesh, scalar_name, class_count, max_bar_labels=20):
     plotter.add_mesh(mesh, scalars=scalar_name,  cmap = colors, show_scalar_bar=True, show_edges=True, edge_opacity=0.3, scalar_bar_args={"fmt": "%.0f", "n_labels": n_labels})
 
 
-def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merges=1000):
-
+def prepare_facet_mesh(input, smooth_iters=5):
+    """Shared input preparation for the original and topology comparison scripts."""
     obj_mesh = load_obj_with_face_normals(input)
     face_adjacency = build_face_adjacency(obj_mesh)
+    smooth_normals(obj_mesh, face_adjacency, n_iter=smooth_iters, feature_angle_deg=30.0)
+    return obj_mesh, face_adjacency
 
-    # Feature-preserving normal-field smoothing to denoise the SOM input (reduces
-    # salt-and-pepper labels). Geometry is untouched; sharp edges are preserved.
-    smooth_normals(obj_mesh, face_adjacency, n_iter=5, feature_angle_deg=30.0)
+
+def train_spherical_som(data, spherical_mesh, radius=0.1, n_rings=0,
+                        init_neuron_size=2, lr=0.2, seed=0, n_epochs=2000,
+                        lr_end=0.01, verbose=True):
+    """Run the actual SphereSOM3D trainer with a reproducible sample sequence."""
+    som = SphereSOM3D(spherical_mesh.copy(deep=True), radius=radius)
+    som.initial_weights = normalize(som.mesh.points) * init_neuron_size
+    som.sample_indices = np.random.RandomState(seed).randint(len(data), size=n_epochs)
+    neighbor_counts = []
+    original_neighbors = som.get_n_ring_neighbors
+
+    def monitored_neighbors(bmu, rings):
+        nodes = original_neighbors(bmu, rings)
+        neighbor_counts.append(0)
+
+        def iterate():
+            for node in nodes:
+                if node != bmu and np.linalg.norm(som.mesh.points[node] - som.mesh.points[bmu]) <= radius:
+                    neighbor_counts[-1] += 1
+                yield node
+        return iterate()
+
+    # Observe eligible neighbor updates without changing their order or weights.
+    som.get_n_ring_neighbors = monitored_neighbors
+    state = np.random.get_state()
+    try:
+        np.random.seed(seed)
+        som.train(data, n_epochs=n_epochs, n_rings=n_rings,
+                  init_neuron_size=init_neuron_size, lr0=lr, lr_end=lr_end, verbose=verbose)
+    finally:
+        np.random.set_state(state)
+        som.get_n_ring_neighbors = original_neighbors
+    som.training_stats = {
+        "mean_updated_non_bmu_neurons": float(np.mean(neighbor_counts)),
+        "fraction_updates_with_non_bmu": float(np.mean(np.asarray(neighbor_counts) > 0)),
+    }
+    return som
+
+
+def cluster_facet_mesh(obj_mesh, face_adjacency, som):
+    """The original BMU, small-face, and component steps, including label ordering."""
+    bmu_labels = som.predict(obj_mesh.cell_data['Normals'])
+    bmu_labels = merge_small_faces(obj_mesh, bmu_labels, face_adjacency, area_ratio=0.03)
+    raw_labels, raw_labels_count = remap_labels(bmu_labels, mesh=obj_mesh)
+    obj_mesh.cell_data["raw_labels"] = raw_labels
+    separated = separate_disconnected_components(obj_mesh, face_adjacency, raw_labels)
+    separated, _ = remap_labels(separated, mesh=obj_mesh)
+    separated, _ = remap_labels(separated, mesh=obj_mesh)
+    obj_mesh.cell_data["separated_region_labels"] = separated
+    return bmu_labels, raw_labels, raw_labels_count, separated
+
+
+def merge_facet_regions(obj_mesh, separated, face_adjacency, power_thr, max_merges=1000):
+    """The original slider's merge operation, shared by both entry points."""
+    merged = merge_region_based_on_power(
+        obj_mesh, separated.copy(), face_adjacency,
+        power_thr=float(power_thr), max_merges=max_merges,
+        target_n_regs=None, verbose=False)
+    return remap_labels(merged)
+
+
+def main(input, radius, n_rings, init_neuron_size, lr, power_thr=0.15, max_merges=1000,
+         seed=0, n_epochs=2000, lr_end=0.01, smooth_iters=5, sphere_mesh=None):
+
+    obj_mesh, face_adjacency = prepare_facet_mesh(input, smooth_iters)
 
     import time
     start_time = time.time()
     data_for_som = obj_mesh.cell_data['Normals']   # already unit-length (compute_normals + smooth_normals)
 
-    spherical_mesh = pv.read("regular_sphere.obj")
-    som = SphereSOM3D(spherical_mesh, radius=radius)
-    som.train(data_for_som, n_epochs=2000, n_rings=n_rings, init_neuron_size = init_neuron_size, lr0=lr)
+    spherical_mesh = pv.read(str(sphere_mesh or Path(__file__).resolve().with_name("regular_sphere.obj")))
+    som = train_spherical_som(data_for_som, spherical_mesh, radius, n_rings,
+                              init_neuron_size, lr, seed, n_epochs, lr_end)
     
     #Predict labels
-    bmu_labels = som.predict(data_for_som)                         # node id per face        
-    bmu_labels = merge_small_faces(obj_mesh, bmu_labels, face_adjacency, area_ratio=0.03) # Merge small faces into their largest neighbor's cluster (if the face is <5% of the average face area)
-
-    raw_labels, raw_labels_count = remap_labels(bmu_labels, mesh=obj_mesh)  # Convert to face labels 0-based indices
+    bmu_labels, raw_labels, raw_labels_count, separated_region_labels = cluster_facet_mesh(
+        obj_mesh, face_adjacency, som)
     print("SOM clustering: there are {} clusters".format(raw_labels_count))
     obj_mesh.cell_data["raw_labels"] = raw_labels # Assign cluster labels to each face
     
-    #Separate disconnected components
-    separated_region_labels = separate_disconnected_components(obj_mesh, face_adjacency, raw_labels)
-    separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)  # Convert to face labels 0-based indices
-
-    separated_region_labels, _ = remap_labels(separated_region_labels, mesh=obj_mesh)
-    obj_mesh.cell_data["separated_region_labels"] = separated_region_labels
-
     # The power-based region merge is now driven by the power_thr slider in
     # subplot(1, 1) (see render_segmentation below), so it is not run here.
 
@@ -138,11 +194,8 @@ def main(input, radius, n_rings, init_neuron_size, lr,  power_thr=0.15, max_merg
     latest = {"labels": None}
 
     def render_segmentation(power_thr_val):
-        merged = merge_region_based_on_power(
-            obj_mesh, separated_region_labels.copy(), face_adjacency,
-            power_thr=float(power_thr_val), max_merges=max_merges,
-            target_n_regs=None, verbose=False)
-        labels, count = remap_labels(merged)          # 0-based labels + region count
+        labels, count = merge_facet_regions(
+            obj_mesh, separated_region_labels, face_adjacency, power_thr_val, max_merges)
         count = max(int(count), 1)
         latest["labels"] = labels                     # remember for saving on exit
         obj_mesh12.cell_data["merged_similar_region_labels"] = labels
@@ -194,6 +247,13 @@ if __name__ == "__main__":
     parser.add_argument("--init_neu_size", type=float, default=2, help="Initial distance of neurons to the origin")
     parser.add_argument("--lr", type=float, default=0.2, help="Learning rate for SOM training")
     parser.add_argument("--power_thr", type=float, default=0.39, help="stop when best remaining power < this value")
+    parser.add_argument("--seed", type=int, default=0, help="Training seed shared with seg_facet_planar.py")
+    parser.add_argument("--epochs", type=int, default=2000)
+    parser.add_argument("--lr-end", type=float, default=0.01)
+    parser.add_argument("--smooth-iters", type=int, default=5)
+    parser.add_argument("--max-merges", type=int, default=1000)
+    parser.add_argument("--sphere-mesh", type=Path, default=Path(__file__).resolve().with_name("regular_sphere.obj"))
 
     args = parser.parse_args()
-    main(args.input, args.radius,  args.n_rings, args.init_neu_size, args.lr, args.power_thr)
+    main(args.input, args.radius, args.n_rings, args.init_neu_size, args.lr, args.power_thr,
+         args.max_merges, args.seed, args.epochs, args.lr_end, args.smooth_iters, args.sphere_mesh)

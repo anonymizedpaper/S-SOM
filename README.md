@@ -34,11 +34,22 @@ Install dependencies via bash:
 pip install -r requirements.txt
 
 ## Run
+
+- Planar facet SOM with boundary visualization and a paired S-SOM comparison:
+  `python seg_facet_planar.py --input datasets/3DPuzzle/brick_part01.obj`
+  See [the topology experiment guide](TOPOLOGY_ABLATION.md) for training modes,
+  controls, figure exports, and interpretation.
+
 - Facet segmentation using normal vector as feature descriptor:
 python seg_facet.py --obj_file=./datasets/3DPuzzle/brick_part01.obj
 
 - Part segmentation: --fea can be either "sdf_cur", "sdf", or "cur"
 python seg_part.py --input=./datasets/Princeton/30.obj --fea="sdf_cur" 
+
+- Planar / spherical part SOM ablation with shared initial feature weights:
+  `python seg_part_planar.py --input datasets/Princeton/1.obj --init sample --seed 0`
+  See [the part topology experiment guide](PART_TOPOLOGY_ABLATION.md) for the
+  original reference mode, six-panel comparison, paired seeds and exports.
 
 ## Illustration of interactive adjustment of the segment merging threshold
 User can adjust the slider interactively to see the segmentation result 
