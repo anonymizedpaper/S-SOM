@@ -42,7 +42,7 @@ pip install -r requirements.txt
 
 - Facet segmentation using normal vector as feature descriptor:
 ```bash
-python seg_facet.py --obj_file=./datasets/3DPuzzle/brick_part01.obj
+python seg_facet.py --input=./datasets/3DPuzzle/brick_part01.obj
 ```
 
 - Part segmentation: --fea can be either "sdf_cur", "sdf", or "cur"
